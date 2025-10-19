@@ -1,3 +1,15 @@
+// Import new modules
+import { ResponsiveCanvas } from './src/ui/responsive.js';
+import { TouchControls } from './src/ui/touch-controls.js';
+import { Tutorial } from './src/ui/tutorial.js';
+import { assetLoader } from './src/loader-highres.js';
+import { BloomEffect } from './src/render/bloom.js';
+import { RoadGenerator } from './src/road/roadGenerator.js';
+import { LaneManager } from './src/road/lane.js';
+import { RoadRenderer } from './src/road/roadRenderer.js';
+import { SignManager, SignType } from './src/traffic/signs.js';
+import { TrafficLightManager } from './src/traffic/trafficLight.js';
+
 // Game Constants
 const CANVAS = document.getElementById('game-canvas');
 const CTX = CANVAS.getContext('2d');
@@ -5,13 +17,25 @@ const MESSAGES = document.getElementById('game-messages');
 const SCORE_DISPLAY = document.getElementById('score');
 const VIOLATIONS_DISPLAY = document.getElementById('violations');
 
-// Set canvas size
+// Initialize new systems
+const responsiveCanvas = new ResponsiveCanvas(CANVAS);
+const touchControls = new TouchControls();
+const tutorial = new Tutorial();
+const bloomEffect = new BloomEffect(CANVAS);
+const roadGenerator = new RoadGenerator(800, 5000);
+const laneManager = new LaneManager(3, 60);
+const roadRenderer = new RoadRenderer(CTX);
+const signManager = new SignManager();
+const lightManager = new TrafficLightManager();
+
+// Set canvas size with responsive handling
 function resizeCanvas() {
-    const container = CANVAS.parentElement;
-    CANVAS.width = Math.min(800, container.clientWidth - 40);
-    CANVAS.height = 500;
+    const dimensions = responsiveCanvas.resize();
+    // Reinitialize lanes for new width
+    laneManager.initializeLanes(dimensions.width);
+    return dimensions;
 }
-resizeCanvas();
+const canvasDimensions = resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
 // Game State
@@ -41,12 +65,14 @@ const game = {
     intersections: [],
     roadOffset: 0,
     lastViolationCheck: 0,
-    messageTimeout: null
+    messageTimeout: null,
+    useNewRendering: true, // Toggle to use new rendering system
+    bloomEnabled: false // Bloom effect toggle
 };
 
 // Initialize player position
-game.player.x = CANVAS.width / 2 - game.player.width / 2;
-game.player.y = CANVAS.height - 100;
+game.player.x = canvasDimensions.width / 2 - game.player.width / 2;
+game.player.y = canvasDimensions.height - 100;
 
 // Traffic Light Class
 class TrafficLight {
@@ -201,19 +227,37 @@ class Intersection {
 
 // Initialize game objects
 function initializeGame() {
-    // Create traffic lights at intervals
+    // Initialize lanes
+    laneManager.initializeLanes(canvasDimensions.width);
+    
+    // Generate road layout
+    if (game.useNewRendering) {
+        roadGenerator.generateSimpleRoad(15);
+    }
+    
+    // Create traffic lights at intervals using new manager
     for (let i = 0; i < 3; i++) {
         const y = -500 - (i * 800);
         const lane = Math.floor(Math.random() * 3);
         const laneX = getLaneX(lane);
+        
+        // Use new light manager
+        lightManager.addLight(laneX, y, lane);
+        // Keep old system for compatibility
         game.trafficLights.push(new TrafficLight(laneX, y, lane));
     }
     
-    // Create stop signs
+    // Create stop signs using new manager
     for (let i = 0; i < 5; i++) {
         const y = -300 - (i * 600);
         const lane = Math.floor(Math.random() * 3);
         const laneX = getLaneX(lane);
+        const laneWidth = canvasDimensions.width / 3;
+        
+        // Use new sign manager - place at curb edge
+        const curbX = laneX + (laneWidth / 2) + 25;
+        signManager.addSign(SignType.STOP, curbX, y, lane);
+        // Keep old system for compatibility
         game.stopSigns.push(new StopSign(laneX, y, lane));
     }
     
@@ -222,14 +266,17 @@ function initializeGame() {
         const y = -400 - (i * 700);
         game.intersections.push(new Intersection(y));
     }
+    
+    // Show tutorial on first visit
+    tutorial.showOnFirstVisit();
 }
 
 function getLaneX(lane) {
-    const laneWidth = CANVAS.width / 3;
+    const laneWidth = canvasDimensions.width / 3;
     return laneWidth * lane + laneWidth / 2;
 }
 
-// Input Handling
+// Input Handling - now managed by TouchControls but keep legacy for compatibility
 document.addEventListener('keydown', (e) => {
     game.keys[e.key] = true;
     
@@ -241,10 +288,27 @@ document.addEventListener('keydown', (e) => {
     } else if (e.key === 'w' || e.key === 'W') {
         setBlinker('off');
     }
+    // Toggle bloom with B key
+    else if (e.key === 'b' || e.key === 'B') {
+        game.bloomEnabled = bloomEffect.toggle();
+        showMessage(`Bloom effect ${game.bloomEnabled ? 'enabled' : 'disabled'}`, 'warning', 2000);
+    }
 });
 
 document.addEventListener('keyup', (e) => {
     game.keys[e.key] = false;
+});
+
+// Listen to new touch controls
+touchControls.onChange((action, value, state) => {
+    // Update game touch controls state
+    if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
+        game.touchControls[action] = value;
+    } else if (action === 'blinkerLeft' && value) {
+        setBlinker('left');
+    } else if (action === 'blinkerRight' && value) {
+        setBlinker('right');
+    }
 });
 
 // Touch/Button Controls
@@ -305,11 +369,12 @@ function showMessage(text, type, duration = 3000) {
 
 // Game Update Logic
 function update() {
-    // Handle input
-    const isAccelerating = game.keys['ArrowUp'] || game.touchControls.up;
-    const isBraking = game.keys['ArrowDown'] || game.touchControls.down;
-    const isMovingLeft = game.keys['ArrowLeft'] || game.touchControls.left;
-    const isMovingRight = game.keys['ArrowRight'] || game.touchControls.right;
+    // Handle input from both keyboard and new touch controls
+    const touchState = touchControls.getState();
+    const isAccelerating = game.keys['ArrowUp'] || game.touchControls.up || touchState.up;
+    const isBraking = game.keys['ArrowDown'] || game.touchControls.down || touchState.down;
+    const isMovingLeft = game.keys['ArrowLeft'] || game.touchControls.left || touchState.left;
+    const isMovingRight = game.keys['ArrowRight'] || game.touchControls.right || touchState.right;
     
     // Update speed
     if (isAccelerating && game.player.speed < game.player.maxSpeed) {
@@ -359,23 +424,27 @@ function update() {
         game.player.x -= 3;
     }
     
-    // Update traffic lights
+    // Update traffic lights (both old and new systems)
+    lightManager.update();
     game.trafficLights.forEach(light => {
         light.update();
         
         // Recycle lights that have passed
         const drawY = light.y + game.roadOffset;
-        if (drawY > CANVAS.height + 200) {
+        if (drawY > canvasDimensions.height + 200) {
             light.y = -800;
             light.lane = Math.floor(Math.random() * 3);
             light.x = getLaneX(light.lane);
         }
     });
     
+    // Update signs (new system)
+    signManager.update(game.player.x, game.player.y, game.player.speed);
+    
     // Recycle stop signs
     game.stopSigns.forEach(sign => {
         const drawY = sign.y + game.roadOffset;
-        if (drawY > CANVAS.height + 200) {
+        if (drawY > canvasDimensions.height + 200) {
             sign.y = -600;
             sign.lane = Math.floor(Math.random() * 3);
             sign.x = getLaneX(sign.lane);
@@ -387,7 +456,7 @@ function update() {
     // Recycle intersections
     game.intersections.forEach(intersection => {
         const drawY = intersection.y + game.roadOffset;
-        if (drawY > CANVAS.height + 200) {
+        if (drawY > canvasDimensions.height + 200) {
             intersection.y = -700;
         }
     });
@@ -460,36 +529,53 @@ function addViolation(message) {
 function draw() {
     // Clear canvas
     CTX.fillStyle = '#87CEEB'; // Sky blue
-    CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
+    CTX.fillRect(0, 0, canvasDimensions.width, canvasDimensions.height);
     
-    // Draw road
-    drawRoad();
+    // Draw road (use new renderer if enabled)
+    if (game.useNewRendering) {
+        roadRenderer.renderSimpleRoad(canvasDimensions.width, canvasDimensions.height, 3);
+    } else {
+        drawRoad();
+    }
     
     // Draw intersections
     game.intersections.forEach(intersection => {
         intersection.draw(CTX, game.roadOffset);
     });
     
-    // Draw traffic lights
-    game.trafficLights.forEach(light => {
-        light.draw(CTX, game.roadOffset);
-    });
+    // Draw traffic lights (use new system if enabled)
+    if (game.useNewRendering) {
+        lightManager.draw(CTX, game.roadOffset);
+    } else {
+        game.trafficLights.forEach(light => {
+            light.draw(CTX, game.roadOffset);
+        });
+    }
     
-    // Draw stop signs
-    game.stopSigns.forEach(sign => {
-        sign.draw(CTX, game.roadOffset);
-    });
+    // Draw stop signs (use new system if enabled)
+    if (game.useNewRendering) {
+        signManager.draw(CTX, game.roadOffset);
+    } else {
+        game.stopSigns.forEach(sign => {
+            sign.draw(CTX, game.roadOffset);
+        });
+    }
     
     // Draw player car
     drawCar();
+    
+    // Apply bloom effect if enabled
+    if (game.bloomEnabled) {
+        bloomEffect.apply();
+    }
 }
 
 function drawRoad() {
-    const laneWidth = CANVAS.width / 3;
+    const laneWidth = canvasDimensions.width / 3;
     
     // Road background
     CTX.fillStyle = '#333';
-    CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
+    CTX.fillRect(0, 0, canvasDimensions.width, canvasDimensions.height);
     
     // Lane markings
     CTX.strokeStyle = '#ffff00';
@@ -499,13 +585,13 @@ function drawRoad() {
     // Left lane divider
     CTX.beginPath();
     CTX.moveTo(laneWidth, 0);
-    CTX.lineTo(laneWidth, CANVAS.height);
+    CTX.lineTo(laneWidth, canvasDimensions.height);
     CTX.stroke();
     
     // Right lane divider
     CTX.beginPath();
     CTX.moveTo(laneWidth * 2, 0);
-    CTX.lineTo(laneWidth * 2, CANVAS.height);
+    CTX.lineTo(laneWidth * 2, canvasDimensions.height);
     CTX.stroke();
     
     CTX.setLineDash([]);
@@ -515,12 +601,12 @@ function drawRoad() {
     CTX.lineWidth = 5;
     CTX.beginPath();
     CTX.moveTo(0, 0);
-    CTX.lineTo(0, CANVAS.height);
+    CTX.lineTo(0, canvasDimensions.height);
     CTX.stroke();
     
     CTX.beginPath();
-    CTX.moveTo(CANVAS.width, 0);
-    CTX.lineTo(CANVAS.width, CANVAS.height);
+    CTX.moveTo(canvasDimensions.width, 0);
+    CTX.lineTo(canvasDimensions.width, canvasDimensions.height);
     CTX.stroke();
 }
 
