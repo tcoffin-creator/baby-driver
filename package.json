@@ -1,0 +1,32 @@
+{
+  "name": "baby-driver",
+  "version": "0.2.0",
+  "description": "Educational driving game to teach kids the rules of the road",
+  "main": "game.js",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "start:node": "npx http-server -p 8000 -c-1",
+    "build": "echo 'No build step required - vanilla JS modules'",
+    "build:release": "npm run lint && echo 'Release build complete'",
+    "lint": "echo 'No linter configured yet'",
+    "lint:js": "echo 'TODO: Add ESLint configuration'",
+    "test": "echo 'No tests configured yet'",
+    "assets:pack": "echo 'TODO: Implement texture atlas packing'",
+    "playtest": "echo 'See PLAYTEST.md for manual test checklist' && cat PLAYTEST.md"
+  },
+  "keywords": [
+    "game",
+    "education",
+    "driving",
+    "traffic",
+    "kids"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tcoffin-creator/baby-driver.git"
+  },
+  "devDependencies": {},
+  "dependencies": {}
+}

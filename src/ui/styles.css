@@ -1,0 +1,156 @@
+/* Responsive UI styles for Baby Driver */
+
+/* Reset and ensure full viewport usage */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Comic Sans MS', 'Arial', sans-serif;
+}
+
+#game-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%);
+}
+
+/* Responsive canvas */
+#game-canvas {
+    display: block;
+    margin: 0 auto;
+    touch-action: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+/* Touch controls overlay */
+.touch-controls-overlay {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    opacity: 0.8;
+    transition: opacity 0.3s;
+}
+
+.touch-controls-overlay:hover {
+    opacity: 1;
+}
+
+.touch-controls-overlay button {
+    width: 60px;
+    height: 60px;
+    border: 3px solid #333;
+    border-radius: 10px;
+    background: #4CAF50;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.touch-controls-overlay button:active {
+    background: #45a049;
+    transform: scale(0.95);
+}
+
+/* Tutorial modal */
+.tutorial-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.tutorial-content {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tutorial-content h2 {
+    margin-top: 0;
+    color: #4CAF50;
+}
+
+.tutorial-content button {
+    margin-top: 20px;
+    padding: 10px 30px;
+    font-size: 18px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.tutorial-content button:hover {
+    background: #45a049;
+}
+
+/* Help icon */
+.help-icon {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 1500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.help-icon:hover {
+    background: #45a049;
+}
+
+/* Hide tutorial by default */
+.tutorial-modal.hidden {
+    display: none;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .tutorial-content {
+        padding: 20px;
+        max-width: 90%;
+    }
+    
+    .touch-controls-overlay {
+        bottom: 10px;
+        right: 10px;
+    }
+    
+    .touch-controls-overlay button {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
+}
