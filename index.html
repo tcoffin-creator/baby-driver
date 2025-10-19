@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Baby Driver - Learn the Rules of the Road!</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="header">
+            <h1>🚗 Baby Driver</h1>
+            <div id="score-board">
+                <div class="score-item">Score: <span id="score">0</span></div>
+                <div class="score-item">Violations: <span id="violations">0</span></div>
+            </div>
+        </div>
+        
+        <div id="game-messages"></div>
+        
+        <canvas id="game-canvas"></canvas>
+        
+        <div id="controls">
+            <div class="control-row">
+                <button id="blinker-left" class="blinker-btn">⬅️ Left Blinker</button>
+                <button id="blinker-off" class="blinker-btn">Blinkers Off</button>
+                <button id="blinker-right" class="blinker-btn">➡️ Right Blinker</button>
+            </div>
+            <div class="control-row">
+                <div class="dpad">
+                    <button id="btn-up" class="dpad-btn dpad-up">⬆️</button>
+                    <div class="dpad-middle">
+                        <button id="btn-left" class="dpad-btn dpad-left">⬅️</button>
+                        <button id="btn-right" class="dpad-btn dpad-right">➡️</button>
+                    </div>
+                    <button id="btn-down" class="dpad-btn dpad-down">⬇️</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="instructions">
+            <h3>🎮 How to Play:</h3>
+            <ul>
+                <li><strong>Desktop:</strong> Use Arrow Keys to drive, Q/E for blinkers</li>
+                <li><strong>Mobile:</strong> Use on-screen buttons</li>
+                <li>🛑 Stop at STOP signs and red lights</li>
+                <li>🚦 Go when light is green</li>
+                <li>💡 Use blinkers before turning</li>
+                <li>✅ Follow the rules to earn points!</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>
