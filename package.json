@@ -1,0 +1,36 @@
+{
+  "name": "baby-driver",
+  "version": "2.0.0",
+  "description": "Educational driving game to teach kids (ages 5-10) the rules of the road",
+  "main": "game.js",
+  "scripts": {
+    "start": "npx serve -l 8000",
+    "dev": "npx serve -l 8000",
+    "assets:pack": "echo 'Asset packing placeholder - add asset bundling tool here'",
+    "build:release": "echo 'Building release version...' && npm run assets:pack",
+    "test": "echo 'No automated tests yet - see PLAYTEST.md for manual testing'",
+    "lint": "echo 'No linter configured yet'",
+    "format": "echo 'No formatter configured yet'"
+  },
+  "keywords": [
+    "game",
+    "education",
+    "driving",
+    "kids",
+    "traffic-rules",
+    "learning",
+    "canvas",
+    "javascript"
+  ],
+  "author": "Baby Driver Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tcoffin-creator/baby-driver.git"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {},
+  "dependencies": {}
+}
