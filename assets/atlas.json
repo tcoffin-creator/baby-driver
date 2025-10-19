@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "assets": {
+    "car": {
+      "standard": "assets/car.png",
+      "highres": "assets/highres/car.png"
+    },
+    "road_straight": {
+      "standard": "assets/road_straight.png",
+      "highres": "assets/highres/road_straight.png"
+    },
+    "road_curve": {
+      "standard": "assets/road_curve.png",
+      "highres": "assets/highres/road_curve.png"
+    },
+    "road_t_intersection": {
+      "standard": "assets/road_t_intersection.png",
+      "highres": "assets/highres/road_t_intersection.png"
+    },
+    "road_cross": {
+      "standard": "assets/road_cross.png",
+      "highres": "assets/highres/road_cross.png"
+    },
+    "traffic_light": {
+      "standard": "assets/traffic_light.png",
+      "highres": "assets/highres/traffic_light.png"
+    },
+    "stop_sign": {
+      "standard": "assets/stop_sign.png",
+      "highres": "assets/highres/stop_sign.png"
+    },
+    "crosswalk": {
+      "standard": "assets/crosswalk.png",
+      "highres": "assets/highres/crosswalk.png"
+    }
+  }
+}

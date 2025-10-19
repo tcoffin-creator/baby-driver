@@ -1,0 +1,28 @@
+/* Responsive layout styles for full viewport game */
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+#game-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+#game-canvas {
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Ensure no scrollbars appear during gameplay */
+body.game-active {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}

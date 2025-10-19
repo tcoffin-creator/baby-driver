@@ -1,0 +1,33 @@
+{
+  "name": "baby-driver",
+  "version": "2.0.0",
+  "description": "Educational driving game to teach kids the rules of the road",
+  "main": "game.js",
+  "scripts": {
+    "test": "node tests/smoke/playtest-smoke.js",
+    "assets:pack": "node assets/pack-atlas.js",
+    "dev": "python3 -m http.server 8000",
+    "build": "npm run assets:pack",
+    "lint": "echo 'No linter configured'",
+    "format": "echo 'No formatter configured'",
+    "start": "npm run dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tcoffin-creator/baby-driver.git"
+  },
+  "keywords": [
+    "game",
+    "educational",
+    "driving",
+    "kids",
+    "canvas",
+    "html5"
+  ],
+  "author": "tcoffin-creator",
+  "license": "MIT",
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
