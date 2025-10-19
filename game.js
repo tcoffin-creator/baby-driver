@@ -1,18 +1,47 @@
-// Game Constants
+/**
+ * Baby Driver - Main Game Entry Point
+ * Integrates all modular components from src/
+ */
+
+import { ResponsiveCanvas } from './src/ui/responsive.js';
+import { TouchControls } from './src/ui/touch-controls.js';
+import { Tutorial } from './src/ui/tutorial.js';
+import { RoadGenerator } from './src/road/roadGenerator.js';
+import { RoadRenderer } from './src/road/roadRenderer.js';
+import { LaneHelper } from './src/road/lane.js';
+import { StopSign, SignSpawner } from './src/traffic/signs.js';
+import { TrafficLight } from './src/traffic/trafficLight.js';
+import { BloomEffect } from './src/render/bloom.js';
+import { assetLoader } from './src/loader-highres.js';
+
+// Get DOM elements
 const CANVAS = document.getElementById('game-canvas');
 const CTX = CANVAS.getContext('2d');
 const MESSAGES = document.getElementById('game-messages');
 const SCORE_DISPLAY = document.getElementById('score');
 const VIOLATIONS_DISPLAY = document.getElementById('violations');
 
-// Set canvas size
-function resizeCanvas() {
-    const container = CANVAS.parentElement;
-    CANVAS.width = Math.min(800, container.clientWidth - 40);
-    CANVAS.height = 500;
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
+// Initialize responsive canvas system
+const responsiveCanvas = new ResponsiveCanvas(CANVAS);
+const canvasSize = responsiveCanvas.getLogicalSize();
+
+// Initialize UI modules
+const touchControls = new TouchControls({ enabled: true });
+const tutorial = new Tutorial();
+const bloomEffect = new BloomEffect(false); // Disabled by default for performance
+
+// Initialize road system
+const laneHelper = new LaneHelper(canvasSize.width, 3);
+const roadGenerator = new RoadGenerator({ 
+    tileSize: 200, 
+    width: 3, 
+    initialLength: 10 
+});
+const roadRenderer = new RoadRenderer(CTX, canvasSize.width, canvasSize.height);
+const signSpawner = new SignSpawner(laneHelper);
+
+// Initialize road tiles
+const roadTiles = roadGenerator.generate();
 
 // Game State
 const game = {
@@ -30,7 +59,7 @@ const game = {
         color: '#4CAF50'
     },
     keys: {},
-    touchControls: {
+    touchInput: {
         up: false,
         down: false,
         left: false,
@@ -38,195 +67,41 @@ const game = {
     },
     trafficLights: [],
     stopSigns: [],
-    intersections: [],
     roadOffset: 0,
     lastViolationCheck: 0,
-    messageTimeout: null
+    messageTimeout: null,
+    laneHelper: laneHelper
 };
 
-// Initialize player position
-game.player.x = CANVAS.width / 2 - game.player.width / 2;
-game.player.y = CANVAS.height - 100;
+// Initialize player position using lane helper
+game.player.x = laneHelper.getLaneCenter(game.player.lane);
+game.player.y = canvasSize.height - 100;
 
-// Traffic Light Class
-class TrafficLight {
-    constructor(x, y, lane) {
-        this.x = x;
-        this.y = y;
-        this.lane = lane; // Which lane this light controls
-        this.state = 'green'; // 'red', 'yellow', 'green'
-        this.timer = 0;
-        this.redDuration = 180; // frames
-        this.yellowDuration = 60;
-        this.greenDuration = 240;
-        this.width = 30;
-        this.height = 80;
-    }
-    
-    update() {
-        this.timer++;
-        if (this.state === 'green' && this.timer >= this.greenDuration) {
-            this.state = 'yellow';
-            this.timer = 0;
-        } else if (this.state === 'yellow' && this.timer >= this.yellowDuration) {
-            this.state = 'red';
-            this.timer = 0;
-        } else if (this.state === 'red' && this.timer >= this.redDuration) {
-            this.state = 'green';
-            this.timer = 0;
-        }
-    }
-    
-    draw(ctx, offset) {
-        const drawY = this.y + offset;
-        if (drawY < -100 || drawY > CANVAS.height + 100) return;
-        
-        // Traffic light pole
-        ctx.fillStyle = '#333';
-        ctx.fillRect(this.x - 5, drawY, 10, 50);
-        
-        // Traffic light box
-        ctx.fillStyle = '#222';
-        ctx.fillRect(this.x - this.width / 2, drawY - this.height, this.width, this.height);
-        
-        // Lights
-        const lightRadius = 10;
-        const lightX = this.x;
-        
-        // Red light
-        ctx.fillStyle = this.state === 'red' ? '#ff0000' : '#440000';
-        ctx.beginPath();
-        ctx.arc(lightX, drawY - 60, lightRadius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Yellow light
-        ctx.fillStyle = this.state === 'yellow' ? '#ffff00' : '#444400';
-        ctx.beginPath();
-        ctx.arc(lightX, drawY - 40, lightRadius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Green light
-        ctx.fillStyle = this.state === 'green' ? '#00ff00' : '#004400';
-        ctx.beginPath();
-        ctx.arc(lightX, drawY - 20, lightRadius, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    
-    shouldStop() {
-        return this.state === 'red' || this.state === 'yellow';
-    }
-}
+// Setup touch control handlers
+touchControls.on('accelerate', (pressed) => { game.touchInput.up = pressed; });
+touchControls.on('brake', (pressed) => { game.touchInput.down = pressed; });
+touchControls.on('left', (pressed) => { game.touchInput.left = pressed; });
+touchControls.on('right', (pressed) => { game.touchInput.right = pressed; });
 
-// Stop Sign Class
-class StopSign {
-    constructor(x, y, lane) {
-        this.x = x;
-        this.y = y;
-        this.lane = lane;
-        this.width = 50;
-        this.height = 50;
-        this.stoppedFrames = 0;
-        this.playerStopped = false;
-    }
-    
-    draw(ctx, offset) {
-        const drawY = this.y + offset;
-        if (drawY < -100 || drawY > CANVAS.height + 100) return;
-        
-        // Stop sign pole
-        ctx.fillStyle = '#888';
-        ctx.fillRect(this.x - 3, drawY, 6, 40);
-        
-        // Stop sign octagon
-        ctx.fillStyle = '#ff0000';
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
-        
-        ctx.beginPath();
-        const sides = 8;
-        const radius = 25;
-        for (let i = 0; i < sides; i++) {
-            const angle = (Math.PI * 2 * i) / sides - Math.PI / 2;
-            const x = this.x + radius * Math.cos(angle);
-            const y = drawY - 30 + radius * Math.sin(angle);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        // STOP text
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('STOP', this.x, drawY - 30);
-    }
-}
-
-// Intersection Class
-class Intersection {
-    constructor(y) {
-        this.y = y;
-        this.width = CANVAS.width;
-        this.height = 120;
-        this.requiresBlinker = true;
-    }
-    
-    draw(ctx, offset) {
-        const drawY = this.y + offset;
-        if (drawY < -200 || drawY > CANVAS.height + 200) return;
-        
-        // Draw intersection
-        ctx.fillStyle = '#555';
-        ctx.fillRect(0, drawY, this.width, this.height);
-        
-        // Draw crosswalk
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 4;
-        for (let i = 0; i < this.width; i += 20) {
-            ctx.beginPath();
-            ctx.moveTo(i, drawY);
-            ctx.lineTo(i + 10, drawY);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(i, drawY + this.height);
-            ctx.lineTo(i + 10, drawY + this.height);
-            ctx.stroke();
-        }
-    }
-}
+// Traffic Light and Stop Sign classes now imported from modules
 
 // Initialize game objects
 function initializeGame() {
-    // Create traffic lights at intervals
+    // Create traffic lights at intervals using enhanced TrafficLight class
     for (let i = 0; i < 3; i++) {
         const y = -500 - (i * 800);
         const lane = Math.floor(Math.random() * 3);
-        const laneX = getLaneX(lane);
+        const laneX = laneHelper.getLaneCenter(lane);
         game.trafficLights.push(new TrafficLight(laneX, y, lane));
     }
     
-    // Create stop signs
+    // Create stop signs using SignSpawner for curb-edge placement
     for (let i = 0; i < 5; i++) {
         const y = -300 - (i * 600);
         const lane = Math.floor(Math.random() * 3);
-        const laneX = getLaneX(lane);
-        game.stopSigns.push(new StopSign(laneX, y, lane));
+        signSpawner.spawnSign(y, lane);
     }
-    
-    // Create intersections
-    for (let i = 0; i < 4; i++) {
-        const y = -400 - (i * 700);
-        game.intersections.push(new Intersection(y));
-    }
-}
-
-function getLaneX(lane) {
-    const laneWidth = CANVAS.width / 3;
-    return laneWidth * lane + laneWidth / 2;
+    game.stopSigns = signSpawner.signs;
 }
 
 // Input Handling
@@ -247,7 +122,7 @@ document.addEventListener('keyup', (e) => {
     game.keys[e.key] = false;
 });
 
-// Touch/Button Controls
+// Legacy button controls setup (keeping existing HTML buttons functional)
 function setupTouchControls() {
     const btnUp = document.getElementById('btn-up');
     const btnDown = document.getElementById('btn-down');
@@ -257,19 +132,21 @@ function setupTouchControls() {
     const btnBlinkerRight = document.getElementById('blinker-right');
     const btnBlinkerOff = document.getElementById('blinker-off');
     
+    if (!btnUp) return; // Exit if buttons don't exist
+    
     // D-pad buttons
     ['mousedown', 'touchstart'].forEach(event => {
-        btnUp.addEventListener(event, (e) => { e.preventDefault(); game.touchControls.up = true; });
-        btnDown.addEventListener(event, (e) => { e.preventDefault(); game.touchControls.down = true; });
-        btnLeft.addEventListener(event, (e) => { e.preventDefault(); game.touchControls.left = true; });
-        btnRight.addEventListener(event, (e) => { e.preventDefault(); game.touchControls.right = true; });
+        btnUp.addEventListener(event, (e) => { e.preventDefault(); game.touchInput.up = true; });
+        btnDown.addEventListener(event, (e) => { e.preventDefault(); game.touchInput.down = true; });
+        btnLeft.addEventListener(event, (e) => { e.preventDefault(); game.touchInput.left = true; });
+        btnRight.addEventListener(event, (e) => { e.preventDefault(); game.touchInput.right = true; });
     });
     
     ['mouseup', 'touchend', 'touchcancel'].forEach(event => {
-        btnUp.addEventListener(event, (e) => { e.preventDefault(); game.touchControls.up = false; });
-        btnDown.addEventListener(event, (e) => { e.preventDefault(); game.touchControls.down = false; });
-        btnLeft.addEventListener(event, (e) => { e.preventDefault(); game.touchControls.left = false; });
-        btnRight.addEventListener(event, (e) => { e.preventDefault(); game.touchControls.right = false; });
+        btnUp.addEventListener(event, (e) => { e.preventDefault(); game.touchInput.up = false; });
+        btnDown.addEventListener(event, (e) => { e.preventDefault(); game.touchInput.down = false; });
+        btnLeft.addEventListener(event, (e) => { e.preventDefault(); game.touchInput.left = false; });
+        btnRight.addEventListener(event, (e) => { e.preventDefault(); game.touchInput.right = false; });
     });
     
     // Blinker buttons
@@ -305,11 +182,11 @@ function showMessage(text, type, duration = 3000) {
 
 // Game Update Logic
 function update() {
-    // Handle input
-    const isAccelerating = game.keys['ArrowUp'] || game.touchControls.up;
-    const isBraking = game.keys['ArrowDown'] || game.touchControls.down;
-    const isMovingLeft = game.keys['ArrowLeft'] || game.touchControls.left;
-    const isMovingRight = game.keys['ArrowRight'] || game.touchControls.right;
+    // Handle input (keyboard and touch)
+    const isAccelerating = game.keys['ArrowUp'] || game.touchInput.up;
+    const isBraking = game.keys['ArrowDown'] || game.touchInput.down;
+    const isMovingLeft = game.keys['ArrowLeft'] || game.touchInput.left;
+    const isMovingRight = game.keys['ArrowRight'] || game.touchInput.right;
     
     // Update speed
     if (isAccelerating && game.player.speed < game.player.maxSpeed) {
@@ -325,9 +202,8 @@ function update() {
     // Update road offset (scrolling effect)
     game.roadOffset += game.player.speed;
     
-    // Lane changing
-    const laneWidth = CANVAS.width / 3;
-    const targetX = getLaneX(game.player.lane);
+    // Lane changing using lane helper
+    const targetX = laneHelper.getLaneCenter(game.player.lane);
     
     if (isMovingLeft && Math.abs(game.player.x - targetX) < 5) {
         if (game.player.lane > 0) {
@@ -352,7 +228,7 @@ function update() {
     }
     
     // Smooth lane transition
-    const newTargetX = getLaneX(game.player.lane);
+    const newTargetX = laneHelper.getLaneCenter(game.player.lane);
     if (game.player.x < newTargetX) {
         game.player.x += 3;
     } else if (game.player.x > newTargetX) {
@@ -365,32 +241,23 @@ function update() {
         
         // Recycle lights that have passed
         const drawY = light.y + game.roadOffset;
-        if (drawY > CANVAS.height + 200) {
+        if (drawY > canvasSize.height + 200) {
             light.y = -800;
             light.lane = Math.floor(Math.random() * 3);
-            light.x = getLaneX(light.lane);
+            light.x = laneHelper.getLaneCenter(light.lane);
         }
     });
     
-    // Recycle stop signs
-    game.stopSigns.forEach(sign => {
-        const drawY = sign.y + game.roadOffset;
-        if (drawY > CANVAS.height + 200) {
-            sign.y = -600;
-            sign.lane = Math.floor(Math.random() * 3);
-            sign.x = getLaneX(sign.lane);
-            sign.playerStopped = false;
-            sign.stoppedFrames = 0;
-        }
-    });
+    // Update road tiles and signs
+    roadGenerator.update(game.roadOffset);
+    signSpawner.update(game.roadOffset, canvasSize.height);
     
-    // Recycle intersections
-    game.intersections.forEach(intersection => {
-        const drawY = intersection.y + game.roadOffset;
-        if (drawY > CANVAS.height + 200) {
-            intersection.y = -700;
-        }
-    });
+    // Spawn new stop signs as needed
+    if (Math.random() < 0.01) { // 1% chance per frame
+        const y = -600;
+        signSpawner.spawnSign(y);
+    }
+    game.stopSigns = signSpawner.signs;
     
     // Check for violations
     checkTrafficRules();
@@ -400,15 +267,12 @@ function checkTrafficRules() {
     const now = Date.now();
     if (now - game.lastViolationCheck < 1000) return; // Check once per second
     
-    // Check traffic lights
+    // Check traffic lights using enhanced collision detection
     game.trafficLights.forEach(light => {
         const drawY = light.y + game.roadOffset;
-        const lightLaneX = getLaneX(light.lane);
         
-        // Check if player is in the same lane and approaching the light
-        if (Math.abs(game.player.x - lightLaneX) < 40 && 
-            drawY > game.player.y - 80 && drawY < game.player.y) {
-            
+        // Use traffic light's built-in collision detection
+        if (light.checkCollision(game.player.x, drawY - game.player.y, game.player.lane)) {
             if (light.shouldStop() && game.player.speed > 0.5) {
                 addViolation(`🚦 Ran a ${light.state} light!`);
                 game.lastViolationCheck = now;
@@ -420,14 +284,11 @@ function checkTrafficRules() {
         }
     });
     
-    // Check stop signs
+    // Check stop signs using enhanced collision detection
     game.stopSigns.forEach(sign => {
         const drawY = sign.y + game.roadOffset;
-        const signLaneX = getLaneX(sign.lane);
         
-        if (Math.abs(game.player.x - signLaneX) < 40 && 
-            drawY > game.player.y - 60 && drawY < game.player.y + 20) {
-            
+        if (sign.checkCollision(game.player.x, game.player.y, game.player.lane)) {
             if (game.player.speed < 0.3) {
                 sign.stoppedFrames++;
                 if (sign.stoppedFrames === 30 && !sign.playerStopped) {
@@ -458,70 +319,24 @@ function addViolation(message) {
 
 // Drawing Functions
 function draw() {
-    // Clear canvas
-    CTX.fillStyle = '#87CEEB'; // Sky blue
-    CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
-    
-    // Draw road
-    drawRoad();
-    
-    // Draw intersections
-    game.intersections.forEach(intersection => {
-        intersection.draw(CTX, game.roadOffset);
-    });
+    // Use road renderer for tiles, intersections, and lane markings
+    roadRenderer.drawRoad(roadTiles, game.roadOffset);
     
     // Draw traffic lights
     game.trafficLights.forEach(light => {
         light.draw(CTX, game.roadOffset);
     });
     
-    // Draw stop signs
-    game.stopSigns.forEach(sign => {
-        sign.draw(CTX, game.roadOffset);
-    });
+    // Draw stop signs via sign spawner
+    signSpawner.draw(CTX, game.roadOffset);
     
     // Draw player car
     drawCar();
-}
-
-function drawRoad() {
-    const laneWidth = CANVAS.width / 3;
     
-    // Road background
-    CTX.fillStyle = '#333';
-    CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
-    
-    // Lane markings
-    CTX.strokeStyle = '#ffff00';
-    CTX.lineWidth = 3;
-    CTX.setLineDash([20, 15]);
-    
-    // Left lane divider
-    CTX.beginPath();
-    CTX.moveTo(laneWidth, 0);
-    CTX.lineTo(laneWidth, CANVAS.height);
-    CTX.stroke();
-    
-    // Right lane divider
-    CTX.beginPath();
-    CTX.moveTo(laneWidth * 2, 0);
-    CTX.lineTo(laneWidth * 2, CANVAS.height);
-    CTX.stroke();
-    
-    CTX.setLineDash([]);
-    
-    // Road edges
-    CTX.strokeStyle = '#fff';
-    CTX.lineWidth = 5;
-    CTX.beginPath();
-    CTX.moveTo(0, 0);
-    CTX.lineTo(0, CANVAS.height);
-    CTX.stroke();
-    
-    CTX.beginPath();
-    CTX.moveTo(CANVAS.width, 0);
-    CTX.lineTo(CANVAS.width, CANVAS.height);
-    CTX.stroke();
+    // Apply bloom effect if enabled
+    if (bloomEffect.enabled) {
+        bloomEffect.apply(CTX, CANVAS);
+    }
 }
 
 function drawCar() {
